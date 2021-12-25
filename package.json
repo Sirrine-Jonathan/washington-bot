@@ -1,5 +1,5 @@
 {
-  "name": "blank.bot",
+  "name": "washington.bot",
   "version": "1.0.0",
   "description": "",
   "main": "main.js",
@@ -19,6 +19,7 @@
   },
   "scripts": {
     "start": "node server.js",
+    "build": "cd client/ && yarn build",
     "watch": "nodemon server.js",
     "test": "node index.js",
     "name": "node init.js"
