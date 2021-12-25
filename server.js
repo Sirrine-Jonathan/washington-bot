@@ -26,9 +26,15 @@ app.use(express.static(path.resolve(__dirname, "./client/build")));
 
 // setup io for talking with client
 
-const client_io = require("socket.io")(server);
+const client_io = require("socket.io")(server, {
+  allowEIO3: true,
+  cors: {
+    origin: true,
+    credentials: true,
+  },
+});
 client_io.on("connection", (socket) => {
-  console.log("client connected");
+  console.log("Connected to bot client");
   socket.emit("connection", null);
   bot.log("Connected to bot server");
 });
@@ -77,6 +83,10 @@ game_io.on("connect", () => {
     bot.em.on(event, (...params) => game_io.emit(event, ...params));
   });
   bot.em.on("log", (...params) => client_io.emit("log", ...params));
+  bot.em.on("leave_game", (...params) => {
+    console.log("leave_game bot event fired");
+    client_io.emit("leave_game", ...params);
+  });
 
   let receive_events = [
     "game_start",
@@ -89,9 +99,13 @@ game_io.on("connect", () => {
   ];
   receive_events.forEach((event) => {
     game_io.on(event, (data) => {
-      bot?.[event](data);
+      let alt_data = bot?.[event](data);
       if (event === "game_update") {
-        client_io.emit("game_update", data);
+        console.log(alt_data);
+        client_io.emit("game_update", alt_data ?? data);
+      }
+      if (event === "game_start") {
+        client_io.emit("game_start", data);
       }
     });
   });
@@ -101,7 +115,7 @@ app.get("/quickplay", (req, res) => {
   console.log("quickplay");
   bot.log("Quickplay selected");
   game_io.emit("join_private", customGameId, userId);
-  game_io.emit("set_force_start", customGameId, true);
+  setTimeout(() => game_io.emit("set_force_start", customGameId, true), 2000);
   res.send({
     url: `http://bot.generals.io/games/${encodeURIComponent(customGameId)}`,
     username: userId,
@@ -109,7 +123,9 @@ app.get("/quickplay", (req, res) => {
 });
 
 app.get("/rejoin", (req, res) => {
-  bot.log(`Rejoining ${customGameId}`);
+  bot.log(
+    `Rejoining http://bot.generals.io/games/${encodeURIComponent(customGameId)}`
+  );
   game_io.emit("set_force_start", customGameId, true);
 });
 
@@ -121,7 +137,7 @@ app.get("/invite/:game_id", (req, res) => {
   game_io.emit("join_private", customGameId, userId);
   game_io.emit("set_force_start", customGameId, true);
   res.send({
-    url: `http://bot.generals.io/games/${encodeURIComponent()}`,
+    url: `http://bot.generals.io/games/${encodeURIComponent(customGameId)}`,
   });
 });
 
@@ -133,6 +149,12 @@ app.get("/1v1", () => {
 app.get("/ffa", () => {
   bot.log("Joining FFA");
   game_io.emit("play", userId);
+});
+
+app.get("/quit", () => {
+  bot.log("Quitting the game");
+  game_io.emit("cancel", userId);
+  game_io.emit("leave_game", userId);
 });
 
 // start server

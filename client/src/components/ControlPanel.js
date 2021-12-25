@@ -4,7 +4,18 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import styled from "styled-components";
 const ControlPanel = ({ bot }) => {
-  const [gameID, setGameID] = useState("");
+  const [gameID, setGameID] = useState("sirrine");
+  const quit = () => {
+    fetch(`/quit`)
+      .then((res) => res.json())
+      .then((data) => {
+        toast(
+          <StyledLink href={`${data.url}`} target="_blank" rel="noreferrer">
+            Quit Game!
+          </StyledLink>
+        );
+      });
+  };
   const quickplay = () => {
     fetch(`/quickplay`)
       .then((res) => res.json())
@@ -18,7 +29,7 @@ const ControlPanel = ({ bot }) => {
       .then((data) => {
         toast(
           <StyledLink href={`${data.url}`} target="_blank" rel="noreferrer">
-            Go to game!
+            Game Starting!
           </StyledLink>
         );
       });
@@ -46,7 +57,7 @@ const ControlPanel = ({ bot }) => {
       });
   };
   const play = () => {
-    fetch(`/1v1`)
+    fetch(`/ffa`)
       .then((res) => res.json())
       .then((data) => {
         toast(
@@ -81,6 +92,10 @@ const ControlPanel = ({ bot }) => {
           </Card.Header>
           <Divider />
           <ButtonRow>
+            <StyledButton color="red" onClick={quit}>
+              <Icon name="close icon" />
+              <div>Quit</div>
+            </StyledButton>
             <StyledButton primary onClick={quickplay}>
               <Icon name="game" />
               <div>Quick Play</div>
@@ -95,7 +110,7 @@ const ControlPanel = ({ bot }) => {
             </StyledButton>
             <StyledButton secondary onClick={join}>
               <Icon name="redo alternate" />
-              <div>Rejoin</div>
+              <div>Ready Up</div>
             </StyledButton>
           </ButtonRow>
         </Card.Content>

@@ -1,10 +1,15 @@
 import styled from "styled-components";
+import { useEffect, useRef } from "react";
 const Log = ({ log }) => {
+  const ref = useRef();
+  useEffect(() => {
+    ref.current.scrollTop = ref.current.scrollHeight;
+  });
   return (
     <>
-      <StyledLog>
-        {log.map((line) => (
-          <div>{line}</div>
+      <StyledLog ref={ref}>
+        {log.map((line, idx) => (
+          <div key={idx}>{line}</div>
         ))}
       </StyledLog>
       <Buffer />
