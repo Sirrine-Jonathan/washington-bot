@@ -8,7 +8,7 @@
  */
 
 // config
-const PORT = 8080;
+const PORT = process.env.PORT || 8080;
 
 // bring in the bot
 const Bot = require("./src/bot.js");
@@ -25,7 +25,6 @@ const path = require("path");
 app.use(express.static(path.resolve(__dirname, "./client/build")));
 
 // setup io for talking with client
-
 const client_io = require("socket.io")(server, {
   allowEIO3: true,
   cors: {
@@ -39,6 +38,10 @@ client_io.on("connection", (socket) => {
   bot.log("Connected to bot server");
 });
 
+client_io.on("disconnect", () => {
+  console.log("Disconnected from client");
+});
+
 // setup io for talking with game server
 const base = "https://bot.generals.io";
 const game_io = require("socket.io-client")(base);
@@ -48,6 +51,7 @@ let customGameId = "washington_quickplay";
 const userId = process.env.BOT_ID;
 
 game_io.on("disconnect", () => {
+  console.log("Disconnected from game server");
   bot.log("Disconnected from game server");
   console.error("Disconnected from server.");
   process.exit(1);
@@ -101,7 +105,6 @@ game_io.on("connect", () => {
     game_io.on(event, (data) => {
       let alt_data = bot?.[event](data);
       if (event === "game_update") {
-        console.log(alt_data);
         client_io.emit("game_update", alt_data ?? data);
       }
       if (event === "game_start") {

@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { Card, Input, Button, Icon, Divider, Image } from "semantic-ui-react";
+import { Card, Input, Button, Icon, Divider, Modal } from "semantic-ui-react";
 import { ToastContainer, toast } from "react-toastify";
+import MapModal from "./MapModal";
 import "react-toastify/dist/ReactToastify.css";
 import styled from "styled-components";
+
 const ControlPanel = ({ bot }) => {
   const [gameID, setGameID] = useState("sirrine");
+  const [open, setOpen] = useState(false);
   const quit = () => {
     fetch(`/quit`)
       .then((res) => res.json())
@@ -93,15 +96,20 @@ const ControlPanel = ({ bot }) => {
           <Divider />
           <ButtonRow>
             <StyledButton color="red" onClick={quit}>
-              <Icon name="close icon" />
+              <Icon name="close" />
               <div>Quit</div>
             </StyledButton>
+            {/* <StyledButton primary onClick={() => setOpen(true)}>
+              <Icon name="bug" />
+              <div>Debugger</div>
+            </StyledButton> */}
+            <MapModal open={open} setOpen={setOpen} />
             <StyledButton primary onClick={quickplay}>
-              <Icon name="game" />
+              <Icon name="rocket" />
               <div>Quick Play</div>
             </StyledButton>
             <StyledButton primary onClick={challenge}>
-              <Icon name="game" />
+              <Icon name="handshake" />
               <div>1v1</div>
             </StyledButton>
             <StyledButton primary onClick={play}>

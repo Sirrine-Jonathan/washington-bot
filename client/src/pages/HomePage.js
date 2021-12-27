@@ -8,7 +8,6 @@ import Log from "../components/Log";
 import Canvas from "../components/Canvas";
 import ControlPanel from "../components/ControlPanel";
 import { patch, isPerimeter, isEnemy } from "../utils";
-const ENDPOINT = "http://localhost:8080";
 
 const HomePage = () => {
   const [game, setGame] = useState({
@@ -141,7 +140,7 @@ const HomePage = () => {
   };
 
   useEffect(() => {
-    const socket = io(ENDPOINT);
+    const socket = io();
     socket.on("game_update", game_update_handler);
     socket.on("game_start", game_start_handler);
     socket.on("leave_game", leave_game_handler);
