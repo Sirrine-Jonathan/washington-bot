@@ -8,10 +8,11 @@
  */
 
 // config
+const BOT_FILENAME = 'bot_enirrisky.js'; // <-- change this if you want to use a different bot
 const PORT = process.env.PORT || 8080;
 
 // bring in the bot
-const Bot = require("./src/bot.js");
+const Bot = require(`./src/${BOT_FILENAME}`);
 const bot = new Bot();
 
 // setup express server
@@ -24,49 +25,54 @@ const path = require("path");
 // set express server to serve static frontend
 app.use(express.static(path.resolve(__dirname, "./client/build")));
 
-// setup io for talking with client
-const client_io = require("socket.io")(server, {
+// setup io for talking with frontend
+const server_io = require("socket.io")(server, {
   allowEIO3: true,
   cors: {
     origin: true,
     credentials: true,
   },
 });
-client_io.on("connection", (socket) => {
-  console.log("Connected to bot client");
+
+// runs when frontend makes a connection to this server
+server_io.on("connection", (socket) => {
   socket.emit("connection", null);
-  bot.log("Connected to bot server");
+  bot.log("Connected to the bot");
 });
 
-client_io.on("disconnect", () => {
+// runs when frontend disconnects
+server_io.on("disconnect", () => {
   console.log("Disconnected from client");
 });
-
-// setup io for talking with game server
-const base = "https://bot.generals.io";
-const game_io = require("socket.io-client")(base);
 
 // global variable for custom game ids
 let customGameId = "washington_quickplay";
 const userId = process.env.BOT_ID;
 
-game_io.on("disconnect", () => {
-  console.log("Disconnected from game server");
-  bot.log("Disconnected from game server");
-  console.error("Disconnected from server.");
-  process.exit(1);
-});
+// setup io for talking with game server
+const base = "https://bot.generals.io";
+const game_io = require("socket.io-client")(base);
 
-game_io.on("connect", () => {
+// this is a socket client setup for talking with the generals.io bot server
+game_io.on('connect', () => {
   console.log("Connected to game server");
   bot.log("Connected to game server");
 
-  game_io.on("error_set_username", (error) => {
-    if (error) {
-      console.error(`ERROR: ${error}`);
-    }
-  });
 
+  // the first time you connect a bot to the generals.io bot server,
+  // you'll need to send a set_username message to register your bot with the id in your config
+  const set_username = false
+  if (set_username){
+    game_io.on("error_set_username", (error) => {
+      if (error) {
+        console.error(`ERROR: ${error}`);
+      }
+    });
+    game_io.emit("set_username", process.env.BOT_ID, process.env.BOT_NAME)
+  }
+
+  // these are all events that our bot could possibly send to the game server
+  // https://dev.generals.io/api
   let send_events = [
     "set_username",
     "play",
@@ -83,15 +89,32 @@ game_io.on("connect", () => {
     "leave_game",
     "stars_and_rank",
   ];
+
+  // Each bot should have an em prop which is an event emitter/listener,
+  // Here we attach all the events the bot might want to emit to the game server
+  // so the bot can communicate with the game server from within its file
   send_events.forEach((event) => {
-    bot.em.on(event, (...params) => game_io.emit(event, ...params));
-  });
-  bot.em.on("log", (...params) => client_io.emit("log", ...params));
-  bot.em.on("leave_game", (...params) => {
-    console.log("leave_game bot event fired");
-    client_io.emit("leave_game", ...params);
+    // when the bot emits this event
+    bot.em.on(event, (...params) => {
+      // send the event to the game server
+      game_io.emit(event, ...params)
+    });
   });
 
+  // Also some additional events that we may call inside our bot
+  // we want to emit from this server to our client
+  bot.em.on("log", (...params) => {
+    // when the bot emits log, send it to the client
+    server_io.emit("log", ...params)
+  });
+  bot.em.on("leave_game", (...params) => {
+    // when the bot emits leave_game, send it to the client
+    console.log("leave_game bot event fired");
+    server_io.emit("leave_game", ...params);
+  });
+
+  // These are all events that the game server could possibly send to the bot
+  // https://dev.generals.io/api
   let receive_events = [
     "game_start",
     "game_update",
@@ -101,18 +124,42 @@ game_io.on("connect", () => {
     "stars",
     "rank",
   ];
+
+  // Here we attach all the events the game server might want to emit to the bot
   receive_events.forEach((event) => {
-    game_io.on(event, (data) => {
-      let alt_data = bot?.[event](data);
+    game_io.on(event, (...params) => {
+      // when the game server emits this event, we call the the bots method associated with that event,
+      // and pass the data from the game server
+      // the bot may want to do modify that data and can return it here
+      const alt_data = bot?.[event](...params);
+      const [data] = params;
       if (event === "game_update") {
-        client_io.emit("game_update", alt_data ?? data);
+        // our server here sends the game update data (possibly modified by our bot) to the client for display
+        server_io.emit("game_update", alt_data ?? data);
       }
       if (event === "game_start") {
-        client_io.emit("game_start", data);
+        // same thing for game start
+        server_io.emit("game_start", alt_data ?? data);
       }
     });
   });
 });
+
+game_io.on("disconnect", () => {
+  const msg = "Disconnected from game server";
+  bot.log(msg);
+  console.error(msg);
+  // let the client know the game servers been disconnected
+  server_io.emit('game_disconnected')
+  process.exit(1);
+});
+
+
+/*
+  Now we define some endpoints our client can call to interact with the game server and/or bot
+  TODO: rather than sending these events in each endpoint directly from game_io client, we should
+  call the bots methods directly so the bot can have more control.
+*/
 
 app.get("/quickplay", (req, res) => {
   console.log("quickplay");
@@ -129,6 +176,7 @@ app.get("/rejoin", (req, res) => {
   bot.log(
     `Rejoining http://bot.generals.io/games/${encodeURIComponent(customGameId)}`
   );
+  game_io.emit("join_private", customGameId, userId);
   game_io.emit("set_force_start", customGameId, true);
 });
 

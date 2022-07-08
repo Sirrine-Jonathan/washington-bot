@@ -176,8 +176,8 @@ const HomePage = () => {
             <Icon name="github" style={{ color: "#fff" }} size="huge" />
           </a>
           <Col>
-            <h1>Washington</h1>
-            <h4>Generals.io Bot</h4>
+            <h1>[Bot] Washington</h1>
+            <h5>Generals.io Bot</h5>
           </Col>
         </Row>
       </PageHeader>

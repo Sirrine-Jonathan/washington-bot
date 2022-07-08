@@ -1,6 +1,5 @@
 /**
- * [Bot] Blank
- * Exists for defining the api, and as a starting point for future bots
+ * [Bot] Washington
  *
  * @format
  */
@@ -98,7 +97,7 @@ module.exports = class Bot {
   perimeter = []; // all the tiles on the perimeter of the bots territory
 
   current_tile = null;
-  current_coors = null;
+  current_coords = null;
   general_tile = null;
   general_coords = null;
 
@@ -157,7 +156,9 @@ module.exports = class Bot {
     }
   };
 
-  // each function is named after the event received from the game server
+  /*
+    functions handling the events sent by the game server
+  */
   game_start = (data) => {
     this.updateFilename();
     this.should_log = true;
@@ -172,215 +173,6 @@ module.exports = class Bot {
       `Game starting! The replay will be available after the game at ${this.replayUrl}`
     );
   };
-  game_lost = (data) => {
-    const line = `Defeated by ${data.killer}`;
-    this.chat(line);
-    this.log(line);
-  };
-  game_won = (data) => {};
-  chat_message = (chat_room, data) => {};
-  stars = (data) => {};
-  rank = (data) => {};
-
-  // function for sending events
-  /*
-    IMPLEMENTED:
-    "attack",
-
-    SHOULD IMPLEMENT:
-    "clear_moves",
-    "ping_tile",
-
-    COULD IMPLEMENT, BUT NOT REALLY NECESSARY
-    "set_username",
-    "play",
-    "join_1v1",
-    "join_private",
-    "set_custom_team",
-    "leave_team",
-    "cancel",
-    "set_force_start",
-    "leave_game",
-    "stars_and_rank",
-  */
-  chat = (msg) => {
-    this.em.emit("chat_message", msg);
-  };
-
-  leave_game = () => {
-    this.updateFilename();
-    this.should_log = false;
-    console.log(`${username} left the game`);
-    this.em.emit("leave_game");
-  };
-
-  /*
-    PATCH FUNCTION
-  */
-  /* Returns a new array created by patching the diff into the old array.
-   * The diff formatted with alternating matching and mismatching segments:
-   * Example 1: patching a diff of [1, 1, 3] onto [0, 0] yields [0, 3].
-   * Example 2: patching a diff of [0, 1, 2, 1] onto [0, 0] yields [2, 0].
-   *
-   * First element of diff is how many are matching.
-   * Patch will copy that number of elements to out.
-   * Next element in diff is how many are differnt.
-   * If num different is x, then the next x elements will be the changes.
-   * Patch will copy the next x number of elements of diff to out.
-   * Next elements will be how many are matching, and will follow the above pattern
-   */
-  patch = (old, diff) => {
-    const out = [];
-    let i = 0;
-    while (i < diff.length) {
-      if (diff[i]) {
-        // matching
-        Array.prototype.push.apply(
-          out,
-          old.slice(out.length, out.length + diff[i])
-        );
-      }
-      i++;
-      if (i < diff.length && diff[i]) {
-        // mismatching
-        Array.prototype.push.apply(out, diff.slice(i + 1, i + 1 + diff[i]));
-        i += diff[i];
-      }
-      i++;
-    }
-    return out;
-  };
-
-  addObjective = (obj, toFront = false) => {
-    this.log(`Adding ${obj.type} objective, target: ${obj.target}`);
-    obj.tick_created = this.internal_tick;
-    if (toFront) {
-      this.objective_queue.unshift(obj);
-    } else {
-      this.objective_queue.push(obj);
-    }
-    const queue_types = this.objective_queue.map((obj) => obj.type);
-    this.log(`Queue length ${this.objective_queue.length}`);
-    this.log(`Queue: `, queue_types);
-  };
-
-  clear = () => {
-    this.objective_queue = [];
-  };
-
-  // gather all useful data from all we are give from the game server
-  gatherIntel = (data) => {
-    // set the bots index
-    if (this.playerIndex === null) {
-      this.playerIndex = data.playerIndex;
-      this.log(`set bot index ${this.playerIndex}`);
-    }
-
-    // game timing
-    this.internal_tick = data.turn / 2;
-    this.game_tick = Math.ceil(this.internal_tick);
-    this.ticks_til_payday = 25 - (this.game_tick % 25);
-
-    // update map variables
-    this.map = this.patch(this.map, data.map_diff);
-    if (data.turn === 1) {
-      this.width = this.map[0];
-      this.height = this.map[1];
-      this.size = this.width * this.height;
-    }
-    this.armies = this.map.slice(2, this.size + 2);
-    this.terrain = this.map.slice(this.size + 2, this.size + 2 + this.size);
-
-    // recognize borders
-    let allTiles = Array(this.size)
-      .fill(false)
-      .map((empty_val, tile) => tile);
-    this.leftBorder = allTiles.filter((tile) => this.isLeftBorder(tile));
-    this.rightBorder = allTiles.filter((tile) => this.isRightBorder(tile));
-
-    // all the enemy tiles
-    let newEnemies = this.terrain
-      .map((tile, idx) => {
-        if (this.isEnemy(idx)) {
-          return idx;
-        }
-        return null;
-      })
-      .filter((tile) => tile !== null);
-    this.enemies = newEnemies;
-
-    // all the tiles we own
-    let newOwned = this.terrain
-      .map((tile, idx) => {
-        if (tile === this.playerIndex) {
-          return idx;
-        }
-        return null;
-      })
-      .filter((tile) => tile !== null);
-    this.owned = newOwned;
-
-    // of the tiles we own, only the ones on the perimeter
-    let newPerimeter = this.owned.filter((tile) => this.isPerimeter(tile));
-    this.perimeter = newPerimeter;
-
-    // of the tiles we own, only the ones that border an enemy
-    let newFrontline = this.owned.filter((tile) => this.isFrontline(tile));
-    this.frontline = newFrontline;
-
-    // update checksum that will help us recognized when/if the bot is stuck
-    let newChecksum = [
-      // all owned tiles
-      ...this.owned,
-
-      // all armies at owned tiles minus ones that increase on every tick anyway
-      ...this.owned
-        .filter((tile) => !this.isGeneral(tile) && !this.isCity(tile))
-        .map((tile) => this.armiesAtTile(tile)),
-    ];
-    if (
-      this.checksum !== null &&
-      JSON.stringify(this.checksum) === JSON.stringify(newChecksum)
-    ) {
-      this.no_change_count++;
-    } else {
-      this.no_change_count = 0;
-    }
-    if (this.no_change_count >= this.no_change_threshold) {
-      this.log(
-        `recognized no change for ${this.no_change_count} consecutive ticks at tick ${this.game_tick}`
-      );
-      this.objective_queue = [];
-      this.no_change_count = 0;
-      this.clear();
-    }
-    this.checksum = newChecksum;
-
-    // do things at first turn
-    if (data.turn === 1) {
-      this.chat(getRandomQuote());
-
-      // set general info
-      this.general_tile = data.generals[this.playerIndex];
-      this.general_coords = this.getCoords(this.general_tile);
-
-      // initialize current tile info
-      this.current_tile = this.general_tile;
-      this.current_coords = this.getCoords(this.current_tile);
-
-      // why not dump a starting report
-
-      this.log("==STARTING REPORT==");
-      this.log({
-        general: this.general_tile,
-        owned: this.owned,
-        current: `${this.current_tile}, (${this.current_coords.x}, ${this.current_coords.y})`,
-        dimensions: `${this.width} x ${this.height}`,
-      });
-    }
-  };
-
-  // runs twice every game tick
   game_update = (data) => {
     if (this.log_chunk.length > 0 && process.env.LOG === "TRUE") {
       const chunk = this.log_chunk.join("") + "\n\n";
@@ -437,6 +229,8 @@ module.exports = class Bot {
       } else if (this.first_fail === null) {
         this.first_fail = null;
       }
+    } else {
+      this.first_fail = null;
     }
 
     /*
@@ -523,6 +317,242 @@ module.exports = class Bot {
       random_from: this.random_from,
       current_path: this.current_path,
     };
+  };
+  game_lost = (data) => {
+    let msg;
+    if (data.killer){
+      msg = `Defeated by ${data.killer}`;
+    } else {
+      msg = `Goodbye`;
+    }
+    this.chat(msg);
+    this.log(msg);
+  };
+  game_won = (data) => {
+    const msg = `Victory!`;
+    this.chat(msg);
+    this.log(msg);
+  };
+  chat_message = (chat_room, data) => {
+    const { username, playerIndex, text } = data;
+    let msg;
+    if (username){
+      msg = `[Room ${chat_room}] ${username} (${playerIndex}): ${text}`;
+    } else {
+      msg = `[Room ${chat_room}]: ${text}`;
+    }
+    this.log(msg);
+  };
+  stars = (data) => {};
+  rank = (data) => {};
+
+   /*
+    Functions used to emit events to the game server
+    they are named the same as the event they emit, but with send_ at the start
+  */
+  send_set_username = (user_id, username) => { this.em.emit("set_username", { user_id, username }); }
+  send_play = (user_id) => { this.em.emit("play", { user_id }); }
+  send_join_1v1 = (user_id) => { this.em.emit("join_1v1", { user_id }); }
+  send_join_private = (custom_game_id, user_id) => { this.em.emit("join_private", { custom_game_id, user_id }); }
+  send_set_custom_team = (custom_game_id, team) => { this.em.emit("set_custom_team", { custom_game_id, team }); }
+  send_join_team = (team_id, user_id) => { this.em.emit("join_team", { team_id, user_id }); }
+  send_leave_team = (team_id) => { this.em.emit("leave_team", { team_id }); }
+  send_cancel = () => { this.em.emit("cancel"); }
+  send_set_force_start = () => { this.em.emit("set_force_start"); }
+  send_attack = (start, end, is50) => { this.em.emit("attack", { start, end, is50 }); }
+  send_clear_moves = () => { this.em.emit("clear_moves"); }
+  send_ping_tile = (index) => { this.em.emit("ping_tile", { index }); }
+  send_chat_message = (chat_room, text) => { this.em.emit("chat_message", chat_room, text); };
+  send_leave_game = () => {
+    this.updateFilename();
+    this.should_log = false;
+    console.log(`${username} left the game`);
+    this.em.emit("leave_game");
+  };
+  send_stars_and_rank = (user_id) => { this.em.emit("stars_and_rank", { user_id }); }
+
+  /*
+    wrapper functions to make sending events to the server easier
+  */
+  chat = (msg) => { this.send_chat_message(this.chat_room, msg); }
+  team_chat = (msg) => { this.send_chat_message(this.team_chat_room, msg); }
+  tell_team_about_general = (general_tile) => {
+    this.send_ping_tile(general_tile);
+    let { x, y } = this.getCoords(tile);
+    this.team_chat(`General at ${x}, ${y}`);
+  }
+
+  /*
+    PATCH FUNCTION
+  */
+  /* Returns a new array created by patching the diff into the old array.
+   * The diff formatted with alternating matching and mismatching segments:
+   * Example 1: patching a diff of [1, 1, 3] onto [0, 0] yields [0, 3].
+   * Example 2: patching a diff of [0, 1, 2, 1] onto [0, 0] yields [2, 0].
+   *
+   * First element of diff is how many are matching.
+   * Patch will copy that number of elements to out.
+   * Next element in diff is how many are differnt.
+   * If num different is x, then the next x elements will be the changes.
+   * Patch will copy the next x number of elements of diff to out.
+   * Next elements will be how many are matching, and will follow the above pattern
+   */
+  patch = (old, diff) => {
+    const out = [];
+    let i = 0;
+    while (i < diff.length) {
+      if (diff[i]) {
+        // matching
+        Array.prototype.push.apply(
+          out,
+          old.slice(out.length, out.length + diff[i])
+        );
+      }
+      i++;
+      if (i < diff.length && diff[i]) {
+        // mismatching
+        Array.prototype.push.apply(out, diff.slice(i + 1, i + 1 + diff[i]));
+        i += diff[i];
+      }
+      i++;
+    }
+    return out;
+  };
+
+  addObjective = (obj, toFront = false) => {
+    this.log(`Adding ${obj.type} objective, target: ${obj.target}`);
+    obj.tick_created = this.internal_tick;
+    if (toFront) {
+      this.objective_queue.unshift(obj);
+    } else {
+      this.objective_queue.push(obj);
+    }
+    const queue_types = this.objective_queue.map((obj) => obj.type);
+    this.log(`Queue length ${this.objective_queue.length}`);
+    this.log(`Queue: `, queue_types);
+  };
+
+  clear = () => {
+    this.objective_queue = [];
+  };
+
+  // gather all useful data from all we are give from the game server
+  gatherIntel = (data) => {
+    // set the bots index
+    if (this.playerIndex === null) {
+      this.playerIndex = data.playerIndex;
+      this.log(`set bot index ${this.playerIndex}`);
+    }
+
+    // game timing
+    this.internal_tick = data.turn / 2;
+    this.game_tick = Math.ceil(this.internal_tick);
+    this.ticks_til_payday = 25 - (this.game_tick % 25);
+
+    // update map variables
+    this.map = this.patch(this.map, data.map_diff);
+    if (data.turn === 1) {
+      this.width = this.map[0];
+      this.height = this.map[1];
+      this.size = this.width * this.height;
+      this.center = Math.floor(this.width / 2) + Math.floor(this.height / 2) * this.width;
+    }
+    this.armies = this.map.slice(2, this.size + 2);
+    this.terrain = this.map.slice(this.size + 2, this.size + 2 + this.size);
+
+    // recognize borders
+    let allTiles = Array(this.size)
+      .fill(false)
+      .map((empty_val, tile) => tile);
+    this.leftBorder = allTiles.filter((tile) => this.isLeftBorder(tile));
+    this.rightBorder = allTiles.filter((tile) => this.isRightBorder(tile));
+
+    // all the enemy tiles
+    let newEnemies = this.terrain
+      .map((tile, idx) => {
+        if (this.isEnemy(idx)) {
+          return idx;
+        }
+        return null;
+      })
+      .filter((tile) => tile !== null);
+    this.enemies = newEnemies;
+
+    // all the tiles we own
+    let newOwned = this.terrain
+      .map((tile, idx) => {
+        if (tile === this.playerIndex) {
+          return idx;
+        }
+        return null;
+      })
+      .filter((tile) => tile !== null);
+    this.owned = newOwned;
+
+    // all the tiles we own that have more than one army
+    let newOwnedWithArmy = this.owned.filter((tile) => {
+      return this.armies[tile] > 1;
+    })
+    this.ownedWithArmy = newOwnedWithArmy;
+
+    // of the tiles we own, only the ones on the perimeter
+    let newPerimeter = this.owned.filter((tile) => this.isPerimeter(tile));
+    this.perimeter = newPerimeter;
+
+    // of the tiles we own, only the ones that border an enemy
+    let newFrontline = this.owned.filter((tile) => this.isFrontline(tile));
+    this.frontline = newFrontline;
+
+    // update checksum that will help us recognized when/if the bot is stuck
+    let newChecksum = [
+      // all owned tiles
+      ...this.owned,
+
+      // all armies at owned tiles minus ones that increase on every tick anyway
+      ...this.owned
+        .filter((tile) => !this.isGeneral(tile) && !this.isCity(tile))
+        .map((tile) => this.armiesAtTile(tile)),
+    ];
+    if (
+      this.checksum !== null &&
+      JSON.stringify(this.checksum) === JSON.stringify(newChecksum)
+    ) {
+      this.no_change_count++;
+    } else {
+      this.no_change_count = 0;
+    }
+    if (this.no_change_count >= this.no_change_threshold) {
+      this.log(
+        `recognized no change for ${this.no_change_count} consecutive ticks at tick ${this.game_tick}`
+      );
+      this.objective_queue = [];
+      this.no_change_count = 0;
+      this.clear();
+    }
+    this.checksum = newChecksum;
+
+    // do things at first turn
+    if (data.turn === 1) {
+      this.chat(getRandomQuote());
+
+      // set general info
+      this.general_tile = data.generals[this.playerIndex];
+      this.general_coords = this.getCoords(this.general_tile);
+
+      // initialize current tile info
+      this.current_tile = this.general_tile;
+      this.current_coords = this.getCoords(this.current_tile);
+
+      // why not dump a starting report
+
+      this.log("==STARTING REPORT==");
+      this.log({
+        general: this.general_tile,
+        owned: this.owned,
+        current: `${this.current_tile}, (${this.current_coords.x}, ${this.current_coords.y})`,
+        dimensions: `${this.width} x ${this.height}`,
+      });
+    }
   };
 
   isFullyStretched = () => {
@@ -726,9 +756,6 @@ module.exports = class Bot {
     this.random_from = null;
 
     if (
-      (this.current_tile === undefined ||
-        this.current_tile === null ||
-        this.armiesAtTile(this.current_tile) <= 1) &&
       objective.queue !== null &&
       objective.queue.length >= 2
     ) {
@@ -830,10 +857,7 @@ module.exports = class Bot {
     let best_source = this.getBestSourceTile(
       this.game_tick < this.PULL_FROM_GENERAL_MAX
     );
-    let perimeter_target =
-      this.game_tick % 2 === 0
-        ? this.getFartherPerimeter(this.general_tile)
-        : this.getClosestPerimeter(best_source);
+    let perimeter_target = this.getClosestPerimeter(best_source);
 
     if (
       best_source !== null &&
@@ -879,7 +903,7 @@ module.exports = class Bot {
     let move_to = null;
 
     // if we have a frontline, let's either move from there, or send reinforcements
-    if (this.frontline > 0) {
+    if (this.frontline.length > 0) {
       this.log(`has frontline`);
       const frontline_tile = this.getBestFrontline();
       if (frontline_tile !== null) {
@@ -898,7 +922,7 @@ module.exports = class Bot {
       this.perimeter.length > 0
     ) {
       this.log(`has perimeter`);
-      const perimeter_tile = this.getBestPerimeter();
+      const perimeter_tile = this.getBestPerimeter(this.game_tick <= this.PULL_FROM_GENERAL_MAX);
       if (perimeter_tile !== null) {
         move_to = this.randomMoveFromTile(priority, perimeter_tile);
         move_from = perimeter_tile;
@@ -1019,16 +1043,15 @@ module.exports = class Bot {
     if (used_priority === "isEmpty") {
       let closest = null;
       let closest_tile = null;
-      let center = Math.floor(this.size / 2);
       viable_options.forEach((tile) => {
-        const distance = this.distanceBetweenTiles(tile, center);
+        const distance = this.distanceBetweenTiles(tile, this.center);
         if (closest === null || distance < closest) {
           closest = distance;
           closest_tile = tile;
         }
       });
       if (closest_tile !== null) {
-        this.log(`Moving to empty tile closest to center (${center})`);
+        this.log(`Moving to empty tile closest to center (${this.center})`);
         move_to = closest_tile;
       }
     }
@@ -1287,8 +1310,14 @@ module.exports = class Bot {
     let best_tile = null;
     this.frontline.forEach((tile) => {
       let armies_at_tile = this.armiesAtTile(tile);
+      let surroundingTiles = this.getSurroundingTiles(tile)
+      let tilesWithBeatableEnemies = surroundingTiles.filter(tile => {
+        let terrain = this.terrain[tile]
+        return terrain >= 0 && this.armiesAtTile(tile) < armies_at_tile
+      })
       if (
         armies_at_tile > most_armies &&
+        tilesWithBeatableEnemies.length > 0 &&
         (includeGeneral || !this.isGeneral(tile))
       ) {
         best_tile = tile;

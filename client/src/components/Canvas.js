@@ -26,29 +26,7 @@ const Canvas = ({ data, showTileNumbers = true }) => {
     <StyledCanvas>
       {data && data.meta ? (
         <GameArea>
-          <Meta>
-            <MetaTitle>Game Information</MetaTitle>
-            <MetaRow>
-              <MetaLabel>Player Index:</MetaLabel>
-              {data?.meta.playerIndex}
-            </MetaRow>
-            <MetaRow>
-              <MetaLabel>Replay URL:</MetaLabel>
-              <a href={data?.meta.replay_url}>{data?.meta.replay_url}</a>
-            </MetaRow>
-            <div>
-              <MetaLabel>Players:</MetaLabel>
-              {data?.meta?.usernames &&
-                data?.meta?.usernames.map((username, idx) => {
-                  return (
-                    <MetaSub key={username}>
-                      <MetaLabel>{idx}:</MetaLabel>
-                      {username}
-                    </MetaSub>
-                  );
-                })}
-            </div>
-          </Meta>
+          <Meta />
           <Board className="Board">{displayBoard()}</Board>
         </GameArea>
       ) : (
@@ -82,31 +60,6 @@ const GameArea = styled.div`
   border-radius: 5px;
   margin: 20px 0;
   box-sizing: border-box;
-`;
-const Meta = styled.div`
-  width: 100%;
-  background: rgba(255, 255, 255, 0.8);
-  color: #000;
-  border-radius: 10px;
-  padding: 15px 30px;
-  font-size: 15px;
-`;
-const MetaTitle = styled.div`
-  font-size: 30px;
-  color: #000;
-  text-shadow: 1px 1px 3px solid #eee;
-  padding: 10px 0 20px;
-`;
-const MetaRow = styled.div`
-  display: flex;
-`;
-const MetaSub = styled.div`
-  display: flex;
-  margin-left: 15px;
-`;
-const MetaLabel = styled.div`
-  margin-right: 10px;
-  font-weight: bold;
 `;
 const Board = styled.div`
   margin: 20px;
